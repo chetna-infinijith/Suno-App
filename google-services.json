@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "97561643825",
+    "project_id": "suno-f4f55",
+    "storage_bucket": "suno-f4f55.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:97561643825:android:a5c78b7d6e08ab7f7afe10",
+        "android_client_info": {
+          "package_name": "com.assnippet.suno"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCMgmMhjhOBKU2WRYjTb0MvlnZncEa7zmI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
