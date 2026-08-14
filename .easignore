@@ -1,0 +1,11 @@
+# Keep EAS uploads small; .gitignore only excludes node_modules
+vendor/
+.expo/
+dist/
+web-build/
+ios/Pods/
+ios/build/
+android/build/
+android/app/build/
+android/.gradle/
+*.orig.*

@@ -12,7 +12,11 @@
     "web": "expo start --web",
     "eject": "expo eject",
     "test": "jest --watchAll",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "eas:build:dev": "eas build --profile development",
+    "eas:build:preview": "eas build --profile preview",
+    "eas:build:prod": "eas build --profile production",
+    "eas:submit": "eas submit --profile production"
   },
   "jest": {
     "preset": "jest-expo"
@@ -58,6 +62,7 @@
     "expo-clipboard": "~7.0.1",
     "expo-constants": "~17.0.3",
     "expo-crypto": "~14.0.1",
+    "expo-dev-client": "~5.0.20",
     "expo-device": "~7.0.1",
     "expo-document-picker": "~13.0.1",
     "expo-file-system": "~18.0.4",
@@ -126,6 +131,7 @@
   "devDependencies": {
     "@babel/core": "^7.27.1",
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
-    "@react-native-community/cli": "~20.0.2"
+    "@react-native-community/cli": "~20.0.2",
+    "eas-cli": "^21.8.0"
   }
 }

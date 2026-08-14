@@ -4,7 +4,10 @@
       "config": {
         "usesNonExemptEncryption": false
       },
-      "infoPlist": {},
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to securely recognize user speech.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access the microphone for recording audio."
+      },
       "buildNumber": "1.0.0",
       "supportsTablet": false,
       "bundleIdentifier": "com.assnippet.suno",
@@ -43,9 +46,11 @@
     "web": {},
     "icon": "./assets/app/app_icon.png",
     "name": "Suno Mobile",
-    "slug": "suno-mobile",
+    "slug": "suno",
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "2789bebb-3499-4bb2-8d89-6d2ea970b014"
+      }
     },
     "scheme": "com.assnippet.suno",
     "splash": {
@@ -56,7 +61,9 @@
     "android": {
       "package": "com.assnippet.suno",
       "permissions": [
-        "android.permission.RECORD_AUDIO", "NOTIFICATIONS"
+        "android.permission.RECORD_AUDIO",
+        "NOTIFICATIONS",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "versionCode": 1,
       "adaptiveIcon": {},
@@ -141,6 +148,7 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "androidNavigationBar": {}
+    "androidNavigationBar": {},
+    "owner": "chetna_k"
   }
 }
