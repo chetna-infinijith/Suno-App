@@ -25,6 +25,7 @@
       },
       "ios": {
         "distribution": "internal",
+        "image": "latest",
         "enterpriseProvisioning": "adhoc"
       }
     },
@@ -35,6 +36,7 @@
         "buildType": "app-bundle"
       },
       "ios": {
+        "image": "latest",
         "distribution": "store"
       }
     }

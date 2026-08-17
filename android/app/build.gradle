@@ -93,8 +93,8 @@ android {
         applicationId 'com.assnippet.suno'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2113
-        versionName "2.11"
+        versionCode 2120
+        versionName "2.12"
     }
     splits {
         abi {
