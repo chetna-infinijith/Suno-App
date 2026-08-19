@@ -34,6 +34,7 @@ const ScribeControlBar = ({
     countdown,
     onSilencePause,
     onSilenceContinue,
+    interruptMessage,
 }) => {
     const isRecording = status === 'recording';
     const isPaused = status === 'paused' || status === 'pause';
@@ -124,6 +125,12 @@ const ScribeControlBar = ({
 
     return (
         <View style={styles.wrapper}>
+            {isPaused && interruptMessage ? (
+                <View style={styles.interruptBanner}>
+                    <Text style={styles.interruptTitle}>Recording interrupted</Text>
+                    <Text style={styles.interruptText}>{interruptMessage}</Text>
+                </View>
+            ) : null}
             <DeleteAppointmentModal
                 visible={showSettingModal}
                 onClose={() => setShowSettingModal(false)}
@@ -397,6 +404,26 @@ const CircleButton = ({ icon, onPress, size, disabled }) => (
 const styles = StyleSheet.create({
     wrapper: {
         padding: 16,
+    },
+    interruptBanner: {
+        backgroundColor: '#FEE4E2',
+        borderColor: '#F04438',
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 12,
+    },
+    interruptTitle: {
+        color: '#B42318',
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: 15,
+        marginBottom: 4,
+    },
+    interruptText: {
+        color: '#912018',
+        fontSize: 13,
+        lineHeight: 18,
     },
     container: {
         flexDirection: 'row',

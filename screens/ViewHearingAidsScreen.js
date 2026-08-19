@@ -30,14 +30,22 @@ import useParams from '../utils/useParams';
 import useWindowDimensions from '../utils/useWindowDimensions';
 import * as SunoApi from '../apis/SunoApi.js';
 import * as GlobalStyles from '../GlobalStyles.js';
-import * as DateUtils from '../utils/DateUtils';
+import {
+  formatPatientProductDate,
+  fetchPatientProductDetail,
+  getDeliveryDate,
+  getExtendedWarrantyDate,
+  getInvoiceDate,
+  getLossDamageWarrantyDate,
+  getManufacturerWarrantyDate,
+  getPatientProductSerial,
+  getReturnDueDate,
+  getServicePlanDate,
+} from '../utils/patientProductFields';
 import { getProductStatusColor, getProductStatusName, getProductStatusTextColor } from './PatientDetailsScreen.js';
 import moment from 'moment';
 
 const defaultProps = { hearingAidsData: null, patientID: null };
-
-const HEARING_AID_DETAIL_QUERY =
-  '{id,patient{id},sale{id,service_date},inventory_product{id,product{id,display_name,master_product{manufacturer{name},specification,type,subtype,description,model}},specification{color,battery,serial_number,additional_notes}},order_item{id,manufacturer{name},model},status,service_plan_expiration_date,extended_warranty_expiration_date,purchase_date,due_date,description,is_active,is_in_use,serial_number,notes,ear,type,subtype,manufacturer_warranty_expiration_date,loss_damage_warranty_expiration_date,delivered_at,delivered_at_display,statuses{value,created_at}}';
 
 const ViewHearingAidsScreen = props => {
   const { theme } = props;
@@ -57,12 +65,13 @@ const ViewHearingAidsScreen = props => {
         return;
       }
       try {
-        const response = await SunoApi.getPatientProductByIdGET(Constants, {
-          id: hearingAidsData.id,
-          query: HEARING_AID_DETAIL_QUERY,
-        });
-        if (response?.status >= 200 && response?.status < 300) {
-          setHearingAidsData(response.json);
+        const detail = await fetchPatientProductDetail(
+          SunoApi.getPatientProductByIdGET,
+          Constants,
+          hearingAidsData.id
+        );
+        if (detail) {
+          setHearingAidsData(detail);
         }
       } catch (error) {
         console.log('Failed to refresh hearing aid details:', error);
@@ -191,19 +200,11 @@ const ViewHearingAidsScreen = props => {
   };
 
   const formatDate = value => {
-    if (!value || value === null) {
-      return '--';
-    }
-
-    return DateUtils.format(value, 'MMM DD, YYYY');
+    const formatted = formatPatientProductDate(value);
+    return formatted === '-' ? '--' : formatted;
   };
 
-  const formatDeliveredDate = value => {
-    if (!value || value === null) {
-      return '--';
-    }
-    return moment(value, 'MM/DD/YYYY').format('MMM DD, YYYY');
-  };
+  const formatDeliveredDate = value => formatDate(value);
 
   const getValue = value => (value || value === 0 ? value : '--');
 
@@ -236,10 +237,8 @@ const ViewHearingAidsScreen = props => {
   const batteryName =
     hearingAidsData?.inventory_product?.specification?.battery || '--';
 
-  const serialNumber =
-    hearingAidsData?.inventory_product?.specification?.serial_number ||
-    hearingAidsData?.serial_number ||
-    '--';
+  const serialNumber = getPatientProductSerial(hearingAidsData);
+  const serialNumberDisplay = serialNumber === '-' ? '--' : serialNumber;
 
     const additionalNotes = isExistingHearingAid ? hearingAidsData?.notes : 
     hearingAidsData?.inventory_product?.specification?.additional_notes || '--';
@@ -255,7 +254,7 @@ const ViewHearingAidsScreen = props => {
             { label: 'Manufacturer', value: manufacturerName },
             {
               label: 'Serial No',
-              value: serialNumber,
+              value: serialNumberDisplay,
             },
           ],
           [{ label: 'Name', value: headerName }],
@@ -266,7 +265,7 @@ const ViewHearingAidsScreen = props => {
         ]
       : [
           [{ label: 'Existing Hearing Aid', value: description }],
-          [{ label: 'Serial No', value: serialNumber }],
+          [{ label: 'Serial No', value: serialNumberDisplay }],
         ]),
     [
       {
@@ -275,57 +274,50 @@ const ViewHearingAidsScreen = props => {
       },
       {
         label: 'Invoice Date',
-        value: formatDate(hearingAidsData?.purchase_date),
-        rawDate: hearingAidsData?.purchase_date,
+        value: formatDate(getInvoiceDate(hearingAidsData)),
+        rawDate: getInvoiceDate(hearingAidsData),
         dateBadge: false,
       },
     ],
     [
       {
         label: 'MFR Warranty',
-        value: formatDate(
-          hearingAidsData
-            ?.manufacturer_warranty_expiration_date
-        ),
-        rawDate:
-          hearingAidsData?.manufacturer_warranty_expiration_date,
+        value: formatDate(getManufacturerWarrantyDate(hearingAidsData)),
+        rawDate: getManufacturerWarrantyDate(hearingAidsData),
         dateBadge: true,
       },
       {
         label: 'L&D Warranty',
-        value: formatDate(
-          hearingAidsData?.loss_damage_warranty_expiration_date
-        ),
-        rawDate:
-          hearingAidsData?.loss_damage_warranty_expiration_date,
+        value: formatDate(getLossDamageWarrantyDate(hearingAidsData)),
+        rawDate: getLossDamageWarrantyDate(hearingAidsData),
         dateBadge: true,
       },
     ],
     [
       {
         label: 'Service Plan',
-        value: formatDate(hearingAidsData?.service_plan_expiration_date),
-        rawDate: hearingAidsData?.service_plan_expiration_date,
+        value: formatDate(getServicePlanDate(hearingAidsData)),
+        rawDate: getServicePlanDate(hearingAidsData),
         dateBadge: true,
       },
       {
         label: 'Return Due Date',
-        value: formatDate(hearingAidsData?.due_date),
-        rawDate: hearingAidsData?.due_date,
+        value: formatDate(getReturnDueDate(hearingAidsData)),
+        rawDate: getReturnDueDate(hearingAidsData),
         dateBadge: true,
       },
     ],
     [
       {
         label: 'Delivery Date',
-        value: formatDeliveredDate(hearingAidsData?.delivered_at_display),
-        rawDate: hearingAidsData?.delivered_at_display,
+        value: formatDeliveredDate(getDeliveryDate(hearingAidsData)),
+        rawDate: getDeliveryDate(hearingAidsData),
         dateBadge: false,
       },
       {
         label: 'Extended Warranty',
-        value: formatDate(hearingAidsData?.extended_warranty_expiration_date),
-        rawDate: hearingAidsData?.extended_warranty_expiration_date,
+        value: formatDate(getExtendedWarrantyDate(hearingAidsData)),
+        rawDate: getExtendedWarrantyDate(hearingAidsData),
         dateBadge: true,
       },
     ],

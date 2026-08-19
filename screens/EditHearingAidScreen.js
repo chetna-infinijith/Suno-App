@@ -34,11 +34,16 @@ import {
   getProductStatusName,
   getProductStatusTextColor,
 } from './PatientDetailsScreen.js';
+import {
+  getOwnPatientProductDate,
+  getManufacturerWarrantyDate,
+  parsePatientProductDate,
+} from '../utils/patientProductFields';
 
 const defaultProps = { hearingAidsData: null, patientID: null };
 
 const HEARING_AID_DETAIL_QUERY =
-  '{id,patient{id},sale{id,service_date},inventory_product{id,product{id,display_name,master_product{manufacturer{name},type,subtype,specification}},specification{color,battery,serial_number,additional_notes,manufacturer_instructions},cost,manufacturer_cost},status,service_plan_expiration_date,extended_warranty_expiration_date,purchase_date,due_date,description,is_active,is_in_use,is_outside_purchase,serial_number,notes,ear,type,subtype,cost,manufacturer_warranty_expiration_date,loss_damage_warranty_expiration_date,delivered_at,delivered_at_display,checked_in_at,statuses{value,created_at}}';
+  '{id,patient{id},sale{id,service_date},inventory_product{id,serial_number,manufacturer_warranty_expiration_date,loss_damage_warranty_expiration_date,product{id,display_name,master_product{manufacturer{name},type,subtype,specification}},specification{color,battery,serial_number,additional_notes,manufacturer_instructions},cost,manufacturer_cost},status,service_plan_expiration_date,extended_warranty_expiration_date,purchase_date,due_date,description,is_active,is_in_use,is_outside_purchase,serial_number,notes,ear,type,subtype,cost,manufacturer_warranty_expiration_date,loss_damage_warranty_expiration_date,delivered_at,delivered_at_display,checked_in_at,statuses{value,created_at}}';
 
 const EAR_OPTIONS = [
   { label: 'None', value: 'N' },
@@ -94,11 +99,7 @@ const DUE_DATE_QUICK_ADDS = [
 
 const DROPDOWN_LIST_MODE = Platform.OS === 'android' ? 'MODAL' : 'SCROLLVIEW';
 
-const parseApiDate = value => {
-  if (!value) return null;
-  const parsed = moment(value, [moment.ISO_8601, 'MM/DD/YYYY'], true);
-  return parsed.isValid() ? parsed.toDate() : null;
-};
+const parseApiDate = value => parsePatientProductDate(value);
 
 const formatDateForApi = date => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
@@ -402,10 +403,13 @@ const EditHearingAidScreen = props => {
   );
 
   const [mfrWarranty, setMfrWarranty] = useState(
-    parseApiDate(initialData?.manufacturer_warranty_expiration_date)
+    parseApiDate(getManufacturerWarrantyDate(initialData))
   );
   const [ldWarranty, setLdWarranty] = useState(
-    parseApiDate(initialData?.loss_damage_warranty_expiration_date)
+    parseApiDate(
+      initialData?.loss_damage_warranty_expiration_date ||
+        initialData?.inventory_product?.loss_damage_warranty_expiration_date
+    )
   );
   const [servicePlan, setServicePlan] = useState(
     parseApiDate(initialData?.service_plan_expiration_date)
@@ -418,7 +422,7 @@ const EditHearingAidScreen = props => {
     parseApiDate(initialData?.purchase_date)
   );
   const [deliveryDate, setDeliveryDate] = useState(
-    parseApiDate(initialData?.delivered_at || initialData?.delivered_at_display)
+    parseApiDate(getOwnPatientProductDate(initialData, 'delivery'))
   );
   const [checkInDate, setCheckInDate] = useState(
     parseApiDate(initialData?.checked_in_at)
@@ -506,15 +510,18 @@ const EditHearingAidScreen = props => {
         detail?.inventory_product?.product?.display_name ||
         ''
     );
-    setMfrWarranty(parseApiDate(detail?.manufacturer_warranty_expiration_date));
-    setLdWarranty(parseApiDate(detail?.loss_damage_warranty_expiration_date));
+    setMfrWarranty(parseApiDate(getManufacturerWarrantyDate(detail)));
+    setLdWarranty(
+      parseApiDate(
+        detail?.loss_damage_warranty_expiration_date ||
+          detail?.inventory_product?.loss_damage_warranty_expiration_date
+      )
+    );
     setServicePlan(parseApiDate(detail?.service_plan_expiration_date));
     setExtendedWarranty(parseApiDate(detail?.extended_warranty_expiration_date));
     setDueDate(parseApiDate(detail?.due_date));
     setPurchaseDate(parseApiDate(detail?.purchase_date));
-    setDeliveryDate(
-      parseApiDate(detail?.delivered_at || detail?.delivered_at_display)
-    );
+    setDeliveryDate(parseApiDate(getOwnPatientProductDate(detail, 'delivery')));
     setCheckInDate(parseApiDate(detail?.checked_in_at));
 
     const currentProduct = detail?.inventory_product?.product;

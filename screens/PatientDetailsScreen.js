@@ -42,6 +42,14 @@ import palettes from '../themes/palettes';
 import * as Utils from '../utils';
 import Breakpoints from '../utils/Breakpoints';
 import * as DateUtils from '../utils/DateUtils';
+import {
+  formatPatientProductDate,
+  fetchPatientProductDetail,
+  getOverviewHearingAidDateRows,
+  getOwnPatientProductDate,
+  getPatientProductSerial,
+  mergePatientProductDetail,
+} from '../utils/patientProductFields';
 import * as StyleSheet from '../utils/StyleSheet';
 import imageSource from '../utils/imageSource';
 import useIsFocused from '../utils/useIsFocused';
@@ -286,6 +294,7 @@ const PatientDetailsScreen = props => {
     postponeRecording,
     onSilenceContinue,
     prepareForNewRecording,
+    interruptMessage,
   } = useAmbientScribe(params?.id ?? defaultProps.id, params?.clientID ?? defaultProps.clientID, selectedSOAPMain, selectedChartNoteMain);
 
   const openBackCamera = async () => {
@@ -826,6 +835,7 @@ const PatientDetailsScreen = props => {
           {
             text: 'Ok',
             onPress: () => {
+              const lastItem = documentID[documentID.length - 1];
               const lastIteName = documentNames[documentNames.length - 1];
               getDocumentFolder(
                 boxAccessToken,
@@ -1014,6 +1024,10 @@ const PatientDetailsScreen = props => {
   // };
 
   const getProductDataByType = (type, subtype, data) => {
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
     return data.filter(item => {
       const master = item.inventory_product?.product?.master_product;
 
@@ -2030,22 +2044,13 @@ const PatientDetailsScreen = props => {
           ? 'Accessory'
           : displayName;
     const showEar = !isAccessoriesSection && item?.ear && item?.ear !== 'N';
-    const serialLabel = item?.serial_number || '-';
-    const returnDueLabel = item?.due_date
-      ? DateUtils.format(item?.due_date, 'MMM DD, YYYY')
-      : '-';
-    const invoiceDateLabel = item?.sale?.service_date
-      ? DateUtils.format(item?.sale?.service_date, 'MMM DD, YYYY')
-      : '-';
-    const mfrWarrantyLabel = item?.manufacturer_warranty_expiration_date
-      ? DateUtils.format(item.manufacturer_warranty_expiration_date, 'MMM DD, YYYY')
-      : '-';
-    const deliveryLabel = item?.delivered_at_display
-      ? moment(item.delivered_at_display, 'MM/DD/YYYY').format('MMM DD, YYYY')
-      : '-';
-    const servicePlanLabel = item?.service_plan_expiration_date
-      ? DateUtils.format(item.service_plan_expiration_date, 'MMM DD, YYYY')
-      : '-';
+    const serialLabel = getPatientProductSerial(item);
+    const invoiceDateLabel = formatPatientProductDate(
+      getOwnPatientProductDate(item, 'invoiceDate')
+    );
+    const overviewDateRows = isAccessoriesSection
+      ? []
+      : getOverviewHearingAidDateRows(item, showFullDetails ? 4 : 2);
 
     return (
       <Surface
@@ -2240,23 +2245,21 @@ const PatientDetailsScreen = props => {
             }}
           >
             {renderPatientProductInfoRow('Serial No', serialLabel)}
-            {renderPatientProductInfoRow(
-              isAccessoriesSection ? 'Invoice Date' : 'Return Due',
-              isAccessoriesSection ?  invoiceDateLabel  : returnDueLabel,
-              
-              !showFullDetails
-            )}
-            {showFullDetails ? (
-              <>
-                {renderPatientProductInfoRow('MFR Warranty', mfrWarrantyLabel)}
-                {renderPatientProductInfoRow('Delivery Date', deliveryLabel)}
-                {renderPatientProductInfoRow(
-                  'Service Plan',
-                  servicePlanLabel,
+            {isAccessoriesSection
+              ? renderPatientProductInfoRow(
+                  'Invoice Date',
+                  invoiceDateLabel,
                   true
-                )}
-              </>
-            ) : null}
+                )
+              : overviewDateRows.map((row, index) => (
+                  <React.Fragment key={row.key}>
+                    {renderPatientProductInfoRow(
+                      row.label,
+                      formatPatientProductDate(row.value),
+                      index === overviewDateRows.length - 1
+                    )}
+                  </React.Fragment>
+                ))}
           </View>
         </TouchableOpacity>
       </Surface>
@@ -4082,32 +4085,60 @@ const PatientDetailsScreen = props => {
                   {/* reviews list */}
                   <SunoApi.FetchGetPatientProductsGET
                     handlers={{
-                      on2xx: reviewsListData => {
+                      on2xx: async reviewsListData => {
                         try {
-                          const deviceData = reviewsListData?.json?.results;
-                          // console.log("===== deviceData :", deviceData)
+                          const deviceData = reviewsListData?.json?.results || [];
                           setProductData(deviceData);
-                          setCurrentDeviceData(
-                            getProductDataByType(2, '', deviceData)
+                          const hearingAids = getProductDataByType(
+                            2,
+                            '',
+                            deviceData
                           );
-                          setCurrentDeviceData(
-                            getProductDataByType(2, '', deviceData)
-                          );
+                          setCurrentDeviceData(hearingAids);
                           setCurrentReceiversData(
                             getProductDataByType(3, 1, deviceData)
                           );
-                          setCurrentTubesData(
+                          setCurrentEarmoldsData(
                             getProductDataByType(3, 2, deviceData)
                           );
-                          setCurrentDomesData(
+                          setCurrentTubesData(
                             getProductDataByType(3, 3, deviceData)
                           );
-                          setCurrentEarmoldsData(
+                          setCurrentDomesData(
                             getProductDataByType(3, 4, deviceData)
                           );
                           setAccessoriesData(
-                            getProductDataByType(3, 999, deviceData)
+                            deviceData.filter(item => {
+                              const master =
+                                item.inventory_product?.product?.master_product;
+                              const itemType = master?.type ?? item.type;
+                              const itemSubtype = master?.subtype ?? item.subtype;
+                              return (
+                                Number(itemType) === 3 &&
+                                ![1, 2, 3, 4].includes(Number(itemSubtype))
+                              );
+                            })
                           );
+
+                          const hydratedHearingAids = await Promise.all(
+                            hearingAids.map(async item => {
+                              if (!item?.id) {
+                                return item;
+                              }
+                              try {
+                                const detail = await fetchPatientProductDetail(
+                                  SunoApi.getPatientProductByIdGET,
+                                  Constants,
+                                  item.id
+                                );
+                                return mergePatientProductDetail(item, detail);
+                              } catch (err) {
+                                logError(err);
+                                return item;
+                              }
+                            })
+                          );
+                          setCurrentDeviceData(hydratedHearingAids);
                         } catch (err) {
                           logError(err);
                         }
@@ -4136,10 +4167,13 @@ const PatientDetailsScreen = props => {
                         <>
                           <SimpleStyleFlashList
                             data={currentDeviceData}
+                            extraData={currentDeviceData}
                             estimatedItemSize={50}
                             horizontal={false}
                             inverted={false}
-                            keyExtractor={(flashListData, index) => index}
+                            keyExtractor={(item, index) =>
+                              String(item?.id ?? index)
+                            }
                             listKey={
                               'Scroll View->Overview->CurrentDevice->View->reviews list->FlashList'
                             }
@@ -4531,12 +4565,12 @@ const PatientDetailsScreen = props => {
                         'No Domes',
                         'MaterialCommunityIcons/circle-outline'
                       )}
-                      {renderPatientProductSection(
+                      {/* {renderPatientProductSection(
                         'Accessories',
                         accessoriesData,
                         'No Accessories',
                         'MaterialCommunityIcons/package-variant-closed'
-                      )}
+                      )} */}
                     </>
                   );
                 }}
@@ -5983,6 +6017,7 @@ const PatientDetailsScreen = props => {
                   countdown={countdown}
                   onSilencePause={pauseRecording}
                   onSilenceContinue={onSilenceContinue}
+                  interruptMessage={interruptMessage}
                 />
 
                 {selectedPreviewMain ? (

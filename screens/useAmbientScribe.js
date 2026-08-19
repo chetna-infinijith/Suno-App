@@ -353,11 +353,33 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import AudioRecord from 'react-native-audio-record';
 import { Buffer } from 'buffer';
 import * as GlobalVariables from '../config/GlobalVariableContext';
-import { Alert, Platform, PermissionsAndroid, Linking } from 'react-native';
+import {
+  Alert,
+  AppState,
+  Platform,
+  PermissionsAndroid,
+  Linking,
+  Vibration,
+} from 'react-native';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import analytics from '@react-native-firebase/analytics';
 import { getSessionId } from '../global-functions/sessionManager';
-import { Vibration } from 'react-native';
+import {
+  activateKeepAwakeAsync,
+  deactivateKeepAwake,
+} from 'expo-keep-awake';
+
+const KEEP_AWAKE_TAG = 'ambient-scribe';
+const BACKGROUND_PCM_TIMEOUT_MS = 4000;
+
+const INTERRUPT_MESSAGES = {
+  background:
+    'Recording paused because capture stopped after the phone left the visit (lock, call, or another app). Audio from before this is saved. Tap the microphone to resume.',
+  connection:
+    'Recording paused because the live connection was lost. Audio from before this is saved. Tap the microphone to resume.',
+  microphone:
+    'Recording paused because the microphone was interrupted. Audio from before this is saved. Tap the microphone to resume.',
+};
 
 export default function useAmbientScribe(
   patientId,
@@ -383,10 +405,16 @@ export default function useAmbientScribe(
 
   const [showSilenceModal, setShowSilenceModal] = useState(false);
   const [countdown, setCountdown] = useState(30);
+  const [interruptMessage, setInterruptMessage] = useState(null);
   const countdownRef = useRef(null);
   const silenceIgnoreUntilRef = useRef(0);
+  const interruptionAlertVisibleRef = useRef(false);
+  const pendingInterruptAlertRef = useRef(null);
+  const expectedSocketCloseRef = useRef(false);
+  const handleCaptureInterruptionRef = useRef(() => {});
 
   const lastAudioTimeRef = useRef(Date.now());
+  const lastPcmTimeRef = useRef(Date.now());
   const lastTranscriptTimeRef = useRef(Date.now());
   const noInputTimerRef = useRef(null);
   const silenceAlertShownRef = useRef(false);
@@ -420,6 +448,29 @@ export default function useAmbientScribe(
     setIsConnecting(false);
   };
 
+  const enableKeepAwake = async () => {
+    try {
+      await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+    } catch (_error) {}
+  };
+
+  const disableKeepAwake = async () => {
+    try {
+      await deactivateKeepAwake(KEEP_AWAKE_TAG);
+    } catch (_error) {}
+  };
+
+  const closeSocketExpected = () => {
+    if (!wsRef.current) {
+      return;
+    }
+    expectedSocketCloseRef.current = true;
+    try {
+      wsRef.current.close();
+    } catch (_error) {}
+    wsRef.current = null;
+  };
+
   const resetScribeSessionState = () => {
     isStartingRef.current = false;
     isRecordingRef.current = false;
@@ -430,13 +481,9 @@ export default function useAmbientScribe(
     setShowSilenceModal(false);
     silenceAlertShownRef.current = false;
     setIsConnecting(false);
+    setInterruptMessage(null);
 
-    if (wsRef.current) {
-      try {
-        wsRef.current.close();
-      } catch (_error) {}
-      wsRef.current = null;
-    }
+    closeSocketExpected();
 
     updateScribeId('');
   };
@@ -456,7 +503,14 @@ export default function useAmbientScribe(
 
   useEffect(() => {
     statusRef.current = status;
-  }, [status]);
+    const shouldStayAwake =
+      status === 'recording' || isConnecting || isStartingRef.current;
+    if (shouldStayAwake) {
+      enableKeepAwake();
+    } else {
+      disableKeepAwake();
+    }
+  }, [status, isConnecting]);
 
   const initAudioRecord = () => {
     AudioRecord.init({
@@ -515,6 +569,7 @@ export default function useAmbientScribe(
     await AudioRecord.start();
     isRecordingRef.current = true;
     lastAudioTimeRef.current = Date.now();
+    lastPcmTimeRef.current = Date.now();
     lastTranscriptTimeRef.current = Date.now();
   };
 
@@ -527,6 +582,7 @@ export default function useAmbientScribe(
 
     isRecordingRef.current = true;
     lastAudioTimeRef.current = Date.now();
+    lastPcmTimeRef.current = Date.now();
     lastTranscriptTimeRef.current = Date.now();
   };
 
@@ -639,6 +695,8 @@ export default function useAmbientScribe(
   // ==========================
   const handleAudioData = data => {
     if (!isRecordingRef.current) return;
+
+    lastPcmTimeRef.current = Date.now();
 
     try {
       const buffer = Buffer.from(data, 'base64');
@@ -756,6 +814,7 @@ export default function useAmbientScribe(
     }
 
     if (existing) {
+      expectedSocketCloseRef.current = true;
       try {
         existing.close();
       } catch (_error) {}
@@ -858,6 +917,7 @@ export default function useAmbientScribe(
         return;
       }
       resetStartState();
+      disableKeepAwake();
       try {
         AudioRecord.stop();
       } catch (_error) {}
@@ -866,9 +926,23 @@ export default function useAmbientScribe(
     ws.onerror = handleStartFailure;
 
     ws.onclose = () => {
+      const expectedClose = expectedSocketCloseRef.current;
+      expectedSocketCloseRef.current = false;
+
+      if (expectedClose) {
+        return;
+      }
+
       if (isStartingRef.current && !isRecordingRef.current) {
         handleStartFailure();
+        return;
       }
+
+      if (statusRef.current !== 'recording') {
+        return;
+      }
+
+      handleCaptureInterruptionRef.current('connection');
     };
 
     wsRef.current = ws;
@@ -995,12 +1069,15 @@ export default function useAmbientScribe(
       totalFramesRef.current = 0;
       noiseSamplesRef.current = [];
       amplitudeHistoryRef.current = [];
+      setInterruptMessage(null);
 
+      await enableKeepAwake();
       connectSocket();
       await startAudioCapture();
     } catch (error) {
       resetScribeSessionState();
       resetStartState();
+      disableKeepAwake();
       setStatus('idle');
       console.log('Start recording error:', error);
     }
@@ -1014,6 +1091,10 @@ export default function useAmbientScribe(
       return;
     }
 
+    statusRef.current = 'paused';
+    setInterruptMessage(null);
+    pendingInterruptAlertRef.current = null;
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'pause' }));
     }
@@ -1021,6 +1102,7 @@ export default function useAmbientScribe(
     setStatus('paused');
     stopTimer();
     isRecordingRef.current = false;
+    disableKeepAwake();
 
     try {
       AudioRecord.stop();
@@ -1032,6 +1114,86 @@ export default function useAmbientScribe(
     clearInterval(countdownRef.current);
     setMicStatus('listening');
   };
+
+  const showInterruptionAlert = message => {
+    if (AppState.currentState !== 'active') {
+      pendingInterruptAlertRef.current = message;
+      return;
+    }
+
+    if (interruptionAlertVisibleRef.current) {
+      return;
+    }
+
+    pendingInterruptAlertRef.current = null;
+    interruptionAlertVisibleRef.current = true;
+    Vibration.vibrate([0, 400, 150, 400]);
+    Alert.alert(
+      'Recording interrupted',
+      message,
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            interruptionAlertVisibleRef.current = false;
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  };
+
+  const handleCaptureInterruption = reason => {
+    if (statusRef.current !== 'recording') {
+      return;
+    }
+
+    pauseRecording();
+
+    const message =
+      INTERRUPT_MESSAGES[reason] || INTERRUPT_MESSAGES.background;
+    setInterruptMessage(message);
+    showInterruptionAlert(message);
+  };
+
+  handleCaptureInterruptionRef.current = handleCaptureInterruption;
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active' && pendingInterruptAlertRef.current) {
+        showInterruptionAlert(pendingInterruptAlertRef.current);
+        return;
+      }
+
+      if (nextState === 'active' && statusRef.current === 'recording') {
+        const socketOpen = wsRef.current?.readyState === WebSocket.OPEN;
+        if (!socketOpen) {
+          handleCaptureInterruptionRef.current('connection');
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'recording') {
+      return undefined;
+    }
+
+    const watchdog = setInterval(() => {
+      if (statusRef.current !== 'recording') {
+        return;
+      }
+      if (AppState.currentState !== 'background') {
+        return;
+      }
+      if (Date.now() - lastPcmTimeRef.current > BACKGROUND_PCM_TIMEOUT_MS) {
+        handleCaptureInterruptionRef.current('microphone');
+      }
+    }, 1000);
+
+    return () => clearInterval(watchdog);
+  }, [status]);
 
   const postponeRecording = async (scribeIdOverride) => {
     // scribeIdOverride may be a press event when wired directly to onPress,
@@ -1078,7 +1240,7 @@ export default function useAmbientScribe(
         stopTimer();
 
         if (wsRef.current) {
-          wsRef.current.close();
+          closeSocketExpected();
         }
 
         setStatus('idle');
@@ -1107,12 +1269,7 @@ export default function useAmbientScribe(
     }
   };
   const reconnectRecordingSocket = () => {
-    if (wsRef.current) {
-      try {
-        wsRef.current.close();
-      } catch (_error) {}
-      wsRef.current = null;
-    }
+    closeSocketExpected();
 
     isStartingRef.current = true;
     connectSocket();
@@ -1134,6 +1291,7 @@ export default function useAmbientScribe(
       setShowSilenceModal(false);
       silenceAlertShownRef.current = false;
       clearInterval(countdownRef.current);
+      setInterruptMessage(null);
 
       // Same reconnect flow as resumeScribeSession (ScribeHistoryScreen)
       reconnectRecordingSocket();
@@ -1434,6 +1592,7 @@ export default function useAmbientScribe(
     try {
       stopTimer();
       AudioRecord.stop();
+      disableKeepAwake();
       resetScribeSessionState();
       setStatus('idle');
     } catch (error) {
@@ -1459,6 +1618,7 @@ export default function useAmbientScribe(
     completeRecording,
     showSilenceModal,
     countdown,
-    onSilenceContinue
+    onSilenceContinue,
+    interruptMessage,
   };
 }

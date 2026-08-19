@@ -577,6 +577,7 @@ const ScribeHistoryScreen = props => {
     showSilenceModal,
     countdown,
     onSilenceContinue,
+    interruptMessage,
   } = useAmbientScribe(
     patientId,
     clinicId,
@@ -2207,6 +2208,7 @@ const ScribeHistoryScreen = props => {
                 countdown={countdown}
                 onSilencePause={pauseRecording}
                 onSilenceContinue={onSilenceContinue}
+                interruptMessage={interruptMessage}
               />
 
               {selectedPreviewMain && captureTranscript ? (

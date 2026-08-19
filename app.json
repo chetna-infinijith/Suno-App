@@ -6,7 +6,10 @@
       },
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to securely recognize user speech.",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access the microphone for recording audio."
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access the microphone for recording visit audio with Ambient Scribe.",
+        "UIBackgroundModes": [
+          "audio"
+        ]
       },
       "buildNumber": "1.0.0",
       "supportsTablet": false,
@@ -63,7 +66,10 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "NOTIFICATIONS",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE"
       ],
       "versionCode": 1,
       "adaptiveIcon": {},
