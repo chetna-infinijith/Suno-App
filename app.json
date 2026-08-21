@@ -6,7 +6,7 @@
       },
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to securely recognize user speech.",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access the microphone for recording visit audio with Ambient Scribe.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access the microphone for recording audio.",
         "UIBackgroundModes": [
           "audio"
         ]
@@ -49,10 +49,10 @@
     "web": {},
     "icon": "./assets/app/app_icon.png",
     "name": "Suno Mobile",
-    "slug": "suno",
+    "slug": "suno-mobile",
     "extra": {
       "eas": {
-        "projectId": "2789bebb-3499-4bb2-8d89-6d2ea970b014"
+        "projectId": "eea0fa8b-3653-4205-a9ec-f8f988040b4b"
       }
     },
     "scheme": "com.assnippet.suno",
@@ -155,6 +155,6 @@
       "**/*"
     ],
     "androidNavigationBar": {},
-    "owner": "chetna_k"
+    "owner": "suno-software"
   }
 }
